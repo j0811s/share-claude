@@ -24,7 +24,9 @@
 share-claude/
 ├── CLAUDE.md                  # このリポジトリ自身への指示（配布物ではない）
 ├── README.md
-├── projects.json              # 配布先マッピング
+├── .gitignore                 # projects.json を除外
+├── projects.example.json      # 配布先マッピングの雛形（コミットする）
+├── projects.json              # 配布先マッピング（gitignore、各マシンで作る）
 ├── bin/
 │   └── deploy.py              # CLI エントリポイント
 ├── deployer/                  # ロジック本体（Python パッケージ）
@@ -45,6 +47,7 @@ share-claude/
 │       ├── rules/
 │       └── settings.json
 ├── test/
+│   ├── test_config.py
 │   ├── test_merge.py
 │   ├── test_plan.py
 │   └── test_smoke.py
@@ -119,8 +122,25 @@ share-claude が所有し、不要ファイル削除まで行うのは以下の3
 
 - `~` は `os.path.expanduser` で展開する
 - 相対パスは share-claude リポジトリルートからの相対として解決する
-- このファイルは git にコミットする（管理対象プロジェクトの記録そのものであるため）。
-  `~` 起点で書けば同一ユーザの別マシンでも通用する
+
+### git 管理
+
+`projects.json` は **gitignore する**。配布先パスはマシンやユーザごとに異なるローカルな設定であり、
+リポジトリが持つべき内容ではないため。
+
+代わりに `projects.example.json` を同じ形式でコミットし、初回セットアップ時にこれをコピーして使う。
+
+```
+cp projects.example.json projects.json
+```
+
+`projects.example.json` の中身は、実在のパスを含まないプレースホルダとする。
+
+```json
+{
+  "portfolio": "~/path/to/portfolio"
+}
+```
 
 ## settings.json のマージ
 
@@ -240,7 +260,10 @@ bin/deploy.py --dry-run --all
 
 ### エラー処理（いずれも exit code 1 で停止）
 
-- `projects.json` が存在しない、または JSON として不正
+- `projects.json` が存在しない
+  → gitignore されており初回は存在しないのが正常なため、
+  `cp projects.example.json projects.json` を促すメッセージを出す
+- `projects.json` が JSON として不正
 - 指定されたプロジェクト名が `projects.json` に無い（利用可能な名前を列挙して表示）
 - 配布先パスが存在しない
 - 配布先パスがディレクトリでない
@@ -259,6 +282,15 @@ Xcode CLT 管理の Python に依存する点は、個人用ツールとして�
 ## テスト
 
 `unittest`（標準ライブラリ）を使う。実行は リポジトリルートで `python3 -m unittest discover test`。
+
+### test_config.py — projects.json の解決と検証
+
+1. `~` を含むパスが展開される
+2. 相対パスがリポジトリルート起点で解決される
+3. `projects.json` が存在しない場合、`projects.example.json` のコピーを促すメッセージを含むエラーになる
+4. JSON として不正な場合にエラーになる
+5. 存在しないプロジェクト名を指定した場合、利用可能な名前を列挙したエラーになる
+6. 配布先パスが存在しない / ディレクトリでない場合にエラーになる
 
 ### test_merge.py — マージポリシーの検証
 
@@ -303,4 +335,4 @@ Xcode CLT 管理の Python に依存する点は、個人用ツールとして�
 4. `deployer/apply.py`
 5. `bin/deploy.py`（CLI 結線）
 6. `test/test_smoke.py`
-7. `common/rules/` の削除、`projects.json` の初期投入、`README.md` の記述
+7. `.gitignore`（`projects.json` を除外）、`projects.example.json`、`README.md`（セットアップ手順）の整備
