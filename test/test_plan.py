@@ -1,9 +1,11 @@
 """build_plan の検証。ファイルシステムのフィクスチャを一時ディレクトリに作る。"""
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
+from deployer.config import ConfigError
 from deployer.plan import build_plan
 
 
@@ -88,6 +90,27 @@ class BuildPlanTest(unittest.TestCase):
         deletes = self._dsts("delete")
         self.assertIn(self.target / ".claude/skills/dead/old.md", deletes)
         self.assertIn(self.target / ".claude/skills/dead", deletes)
+
+    def test_symlinked_mirror_root_raises_when_managed(self):
+        # common/skills にファイルがあるので .claude/skills は管理下。
+        # それがシンボリックリンクだと rglob がリンクの先を辿ってしまい、
+        # 配布先の外にある実ファイルを削除しかねない（C1）。
+        _write(self.repo / "common/skills/a.md", "x")
+        victim = self.target.parent / "victim"
+        victim.mkdir(parents=True)
+        (self.target / ".claude").mkdir(parents=True)
+        os.symlink(str(victim), str(self.target / ".claude/skills"))
+        with self.assertRaises(ConfigError):
+            self._plan()
+
+    def test_symlinked_mirror_root_with_nothing_to_distribute_is_noop(self):
+        # 配布するファイルが無ければ管理下ではないので、シンボリックリンクの
+        # ままでも例外を出さず、単に何もしない（ガードが管理下判定の後にある証拠）。
+        victim = self.target.parent / "victim"
+        victim.mkdir(parents=True)
+        (self.target / ".claude").mkdir(parents=True)
+        os.symlink(str(victim), str(self.target / ".claude/skills"))
+        self.assertEqual(self._plan(), [])
 
     def test_settings_are_merged_into_one_write_action(self):
         _write(

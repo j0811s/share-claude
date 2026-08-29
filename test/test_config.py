@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from deployer.config import ConfigError, load_projects, resolve_target
 
@@ -80,6 +81,26 @@ class ResolveTargetTest(unittest.TestCase):
         path.write_text("x", encoding="utf-8")
         with self.assertRaises(ConfigError):
             resolve_target({"portfolio": path}, "portfolio")
+
+    def test_refuses_home_directory(self):
+        # 実際の Path.home() をそのまま使う（C2: '~' だけの typo を想定）
+        with self.assertRaises(ConfigError):
+            resolve_target({"portfolio": Path.home()}, "portfolio")
+
+    def test_refuses_root_directory(self):
+        # C2: projects.json に "/" を指定した typo を想定
+        with self.assertRaises(ConfigError):
+            resolve_target({"portfolio": Path("/")}, "portfolio")
+
+    def test_accepts_ordinary_directory_under_home(self):
+        # 過剰拒否のガード: ホームディレクトリ配下の普通のディレクトリ
+        # （~/github/portfolio 相当）はこれまで通り受け入れる
+        normal = self.root / "some" / "normal" / "dir"
+        normal.mkdir(parents=True)
+        with mock.patch("deployer.config.Path.home", return_value=self.root):
+            self.assertEqual(
+                resolve_target({"portfolio": normal}, "portfolio"), normal
+            )
 
 
 if __name__ == "__main__":

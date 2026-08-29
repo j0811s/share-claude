@@ -59,6 +59,13 @@ def _mirror_actions(dst_root, source_dirs):
     if not sources:
         return []
 
+    if dst_root.is_symlink():
+        raise ConfigError(
+            "配布先の {} がシンボリックリンクです。"
+            "シンボリックリンクになっているミラー対象ディレクトリへの配布はサポートしていません"
+            "（リンクの先を辿って配布先の外を削除してしまうため）。".format(dst_root)
+        )
+
     actions = []
     for rel in sorted(sources):
         dst = dst_root / rel
@@ -82,15 +89,21 @@ def _stale_actions(dst_root, placed_rels):
             kept_dirs.add(parent)
             parent = parent.parent
 
+    # シンボリックリンクは指す先がファイルでもディレクトリでも
+    # ここでファイル扱いにする（削除は unlink、rmdir はしない）。
+    # is_dir()/is_file() はリンクを辿った先の種別を返すため、リンクを
+    # 見分けずに判定するとリンク先ディレクトリを rmdir しようとして失敗する。
     actions = [
         Action("delete", path, None, None, "delete")
         for path in sorted(dst_root.rglob("*"))
-        if path.is_file() and path not in placed
+        if (path.is_symlink() or path.is_file()) and path not in placed
     ]
 
     # 深い順に削除する。rmdir は空でないと失敗するため順序が要る
     dead_dirs = [
-        path for path in dst_root.rglob("*") if path.is_dir() and path not in kept_dirs
+        path
+        for path in dst_root.rglob("*")
+        if path.is_dir() and not path.is_symlink() and path not in kept_dirs
     ]
     dead_dirs.sort(key=lambda path: len(path.parts), reverse=True)
     actions.extend(Action("delete", path, None, None, "delete") for path in dead_dirs)

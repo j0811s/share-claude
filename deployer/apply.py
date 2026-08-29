@@ -44,7 +44,9 @@ def _execute(action):
         action.dst.parent.mkdir(parents=True, exist_ok=True)
         action.dst.write_text(action.content, encoding="utf-8")
     elif action.kind == "delete":
-        if action.dst.is_dir():
+        # シンボリックリンクは指す先がディレクトリでも rmdir せず unlink する
+        # （rmdir はリンクの先を辿ってしまい、実体を消しかねないため）。
+        if action.dst.is_dir() and not action.dst.is_symlink():
             action.dst.rmdir()
         else:
             action.dst.unlink()

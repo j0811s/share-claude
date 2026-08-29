@@ -38,4 +38,12 @@ def main(argv=None, repo_root=None):
     except ConfigError as exc:
         print("エラー: {}".format(exc), file=sys.stderr)
         return 1
+    except OSError as exc:
+        print(
+            "エラー: 配布処理中にファイル操作が失敗しました: {}\n"
+            "配布先が中途半端な状態になっている可能性があります。"
+            "内容を確認してから再実行してください。".format(exc),
+            file=sys.stderr,
+        )
+        return 1
     return 0

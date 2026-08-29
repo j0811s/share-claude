@@ -1,5 +1,6 @@
 """projects.json のロードと配布先の検証。"""
 import json
+import os
 from pathlib import Path
 
 
@@ -73,4 +74,20 @@ def resolve_target(projects, name):
         raise ConfigError("配布先が存在しません: {}".format(target))
     if not target.is_dir():
         raise ConfigError("配布先がディレクトリではありません: {}".format(target))
+
+    # ここでの正規化は os.path.normpath による文字列上の正規化のみで、
+    # Path.resolve() は使わない（symlink を辿ると /var が /private/var に
+    # 変わる macOS の事情でテストが壊れるため）。返す target 自体も未加工のまま。
+    normalized = os.path.normpath(str(target))
+    if normalized == os.path.normpath(str(Path.home())):
+        raise ConfigError(
+            "配布先がホームディレクトリ自体になっています: {}\n"
+            "projects.json の設定を確認してください"
+            "（'~' だけを指定していませんか）。".format(target)
+        )
+    if normalized == os.path.normpath("/"):
+        raise ConfigError(
+            "配布先がルートディレクトリ（/）になっています: {}\n"
+            "projects.json の設定を確認してください。".format(target)
+        )
     return target
