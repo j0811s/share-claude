@@ -1,3 +1,13 @@
 # 作業用の隔離ワークスペース
 .worktrees/
 .superpowers/
+
+# 配布先パスはマシンごとに異なるローカル設定
+projects.json
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
