@@ -46,6 +46,13 @@ class LoadProjectsTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             load_projects(self.repo)
 
+    def test_non_utf8_file_raises(self):
+        (self.repo / "projects.json").write_bytes(
+            '{"ポートフォリオ": "~/x"}'.encode("shift_jis")
+        )
+        with self.assertRaises(ConfigError):
+            load_projects(self.repo)
+
 
 class ResolveTargetTest(unittest.TestCase):
     def setUp(self):

@@ -22,7 +22,14 @@ def load_projects(repo_root):
         )
 
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        raise ConfigError(
+            "projects.json を読めません（UTF-8 で保存されているか確認してください）: {}".format(exc)
+        ) from exc
+
+    try:
+        raw = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ConfigError("projects.json の JSON が不正です: {}".format(exc)) from exc
 
