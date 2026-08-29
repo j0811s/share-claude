@@ -514,6 +514,13 @@ class BuildPlanTest(unittest.TestCase):
         keeper = _write(self.target / ".claude/rules/hand-written.md", "keep")
         self.assertNotIn(keeper, self._dsts())
 
+    def test_source_dir_with_only_gitkeep_does_not_delete_target_files(self):
+        # .gitkeep しか無いディレクトリを管理下と見なすと、配布0件のまま
+        # 同期が走って配布先を全削除してしまう
+        _write(self.repo / "common/skills/.gitkeep", "")
+        keeper = _write(self.target / ".claude/skills/hand-written.md", "keep")
+        self.assertNotIn(keeper, self._dsts("delete"))
+
     def test_identical_file_is_unchanged(self):
         _write(self.repo / "common/skills/a.md", "same")
         _write(self.target / ".claude/skills/a.md", "same")
@@ -635,17 +642,20 @@ def _mirror_specs(repo_root, project_name):
 
 def _mirror_actions(dst_root, source_dirs):
     """1つのミラー対象ディレクトリについて copy と delete のアクションを組み立てる。"""
-    existing = [d for d in source_dirs if d.is_dir()]
-    if not existing:
-        # ソースがどこにも無い = 未管理。配布先には一切触れない
-        return []
-
     sources = {}
-    for source_dir in existing:
+    for source_dir in source_dirs:
+        if not source_dir.is_dir():
+            continue
         for path in sorted(source_dir.rglob("*")):
             if not path.is_file() or path.name in EXCLUDED_NAMES:
                 continue
             sources[path.relative_to(source_dir)] = path
+
+    # 管理下かどうかはディレクトリの存在ではなく、配布するファイルの有無で決める。
+    # ディレクトリの存在で判定すると .gitkeep しか無いディレクトリが管理下と
+    # 見なされ、配布0件のまま同期が走って配布先の既存ファイルを全削除する。
+    if not sources:
+        return []
 
     actions = []
     for rel in sorted(sources):
@@ -732,7 +742,7 @@ def _write_status(content, dst):
 - [ ] **Step 4: テストを実行して成功を確認する**
 
 Run: `python3 -m unittest discover test -v`
-Expected: PASS — 36 tests OK（Task 1・2 の 22 件 + 今回の 14 件）
+Expected: PASS — 37 tests OK（Task 1・2 の 22 件 + 今回の 15 件）
 
 - [ ] **Step 5: コミット**
 
@@ -951,7 +961,7 @@ def _execute(action):
 - [ ] **Step 4: テストを実行して成功を確認する**
 
 Run: `python3 -m unittest discover test -v`
-Expected: PASS — 44 tests OK（Task 1〜3 の 36 件 + 今回の 8 件）
+Expected: PASS — 45 tests OK（Task 1〜3 の 37 件 + 今回の 8 件）
 
 - [ ] **Step 5: コミット**
 
@@ -1115,7 +1125,7 @@ chmod +x bin/deploy.py
 - [ ] **Step 5: テストを実行して成功を確認する**
 
 Run: `python3 -m unittest discover test -v`
-Expected: PASS — 50 tests OK（Task 1〜4 の 44 件 + 今回の 6 件）
+Expected: PASS — 51 tests OK（Task 1〜4 の 45 件 + 今回の 6 件）
 
 - [ ] **Step 6: CLI が実際に起動することを確認する**
 
@@ -1288,7 +1298,7 @@ Python 3.9 以上、標準ライブラリのみで動く。外部依存は追加
 - [ ] **Step 5: テストが通ることを再確認する**
 
 Run: `python3 -m unittest discover test -v`
-Expected: PASS — 50 tests OK
+Expected: PASS — 51 tests OK
 
 - [ ] **Step 6: `projects.json` が gitignore されていることを確認する**
 
@@ -1322,7 +1332,7 @@ README に配布範囲・削除の範囲・settings.json のマージ規則を�
 | `common/rules` を置かない | 実施済み（ブレスト時に削除・コミット済み） |
 | 配布先マッピング5種 | Task 3（`_mirror_specs`, `_settings_action`, CLAUDE.md） |
 | 所有範囲を3ディレクトリ+2ファイルに限定 | Task 3（`_mirror_specs` が `.claude` 全体を対象にしない）、Task 4 のテスト `test_settings_local_json_survives` |
-| 未管理と管理下だが空の区別 | Task 3（`_mirror_actions` の `existing` チェック）、テスト `test_unmanaged_directory_is_untouched` |
+| 未管理の判定（配布ファイルの有無で決める） | Task 3（`_mirror_actions` の `if not sources`）、テスト `test_unmanaged_directory_is_untouched` と `test_source_dir_with_only_gitkeep_does_not_delete_target_files` |
 | projects.json の形式と `~` 展開 | Task 2 |
 | projects.json の gitignore | Task 6 |
 | settings.json マージポリシー5行 | Task 1（テスト12件がポリシー表を網羅） |
