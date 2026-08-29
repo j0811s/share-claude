@@ -117,5 +117,67 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(changed, 0)
 
 
+class CliTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        self.repo = root / "repo"
+        self.target = root / "target"
+        self.target.mkdir(parents=True)
+        _write(self.repo / "common/skills/a.md", "x")
+        _write(self.repo / "projects.json", json.dumps({"portfolio": str(self.target)}))
+
+    def _run(self, argv):
+        from deployer.cli import main
+
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(argv, repo_root=self.repo)
+        return code, out.getvalue()
+
+    def test_deploys_named_project(self):
+        code, _ = self._run(["portfolio"])
+        self.assertEqual(code, 0)
+        self.assertTrue((self.target / ".claude/skills/a.md").is_file())
+
+    def test_all_flag_deploys_every_project(self):
+        code, _ = self._run(["--all"])
+        self.assertEqual(code, 0)
+        self.assertTrue((self.target / ".claude/skills/a.md").is_file())
+
+    def test_dry_run_does_not_write(self):
+        code, output = self._run(["--dry-run", "portfolio"])
+        self.assertEqual(code, 0)
+        self.assertFalse((self.target / ".claude/skills/a.md").exists())
+        self.assertIn("dry-run", output)
+
+    def test_unknown_project_returns_error_code(self):
+        import contextlib
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            code, _ = self._run(["nope"])
+        self.assertEqual(code, 1)
+
+    def test_missing_projects_json_returns_error_code(self):
+        import contextlib
+
+        (self.repo / "projects.json").unlink()
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            code, _ = self._run(["portfolio"])
+        self.assertEqual(code, 1)
+        self.assertIn("projects.example.json", err.getvalue())
+
+    def test_requires_exactly_one_of_project_or_all(self):
+        from deployer.cli import main
+
+        import contextlib
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main([], repo_root=self.repo)
+            with self.assertRaises(SystemExit):
+                main(["portfolio", "--all"], repo_root=self.repo)
+
+
 if __name__ == "__main__":
     unittest.main()
