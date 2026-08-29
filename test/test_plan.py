@@ -112,6 +112,29 @@ class BuildPlanTest(unittest.TestCase):
         os.symlink(str(victim), str(self.target / ".claude/skills"))
         self.assertEqual(self._plan(), [])
 
+    def test_symlinked_claude_dir_raises_and_preserves_linked_contents(self):
+        # .claude 自体がシンボリックリンクだと、.claude/skills は symlink 経由で
+        # 実体解決すると通常のディレクトリに見えてしまい、狭い is_symlink()
+        # チェックでは検知できない（C3）。rglob がリンク先を辿って配布先の
+        # 外にある既存ファイルを削除しかねない。
+        _write(self.repo / "common/skills/a.md", "x")
+        global_dir = self.target.parent / "global"
+        victim = _write(global_dir / "skills/my-skill/SKILL.md", "precious")
+        os.symlink(str(global_dir), str(self.target / ".claude"))
+        with self.assertRaises(ConfigError):
+            self._plan()
+        self.assertTrue(victim.exists())
+        self.assertEqual(victim.read_text(encoding="utf-8"), "precious")
+
+    def test_symlinked_claude_dir_with_nothing_to_distribute_is_noop(self):
+        # 配布するファイルが無ければ管理下ではないので、.claude がシンボリック
+        # リンクのままでも例外を出さず、単に何もしない（ガードが管理下判定の
+        # 後にある証拠）。
+        global_dir = self.target.parent / "global"
+        global_dir.mkdir(parents=True)
+        os.symlink(str(global_dir), str(self.target / ".claude"))
+        self.assertEqual(self._plan(), [])
+
     def test_settings_are_merged_into_one_write_action(self):
         _write(
             self.repo / "common/settings.json",

@@ -1,6 +1,7 @@
 """配布アクション列の構築。ファイルシステムへの書き込みは一切行わない。"""
 import filecmp
 import json
+import os
 from collections import namedtuple
 from pathlib import Path
 
@@ -17,7 +18,7 @@ def build_plan(repo_root, project_name, target):
     """配布に必要な Action のリストを返す。読み取りのみを行う。"""
     actions = []
     for target_rel, source_dirs in _mirror_specs(repo_root, project_name):
-        actions.extend(_mirror_actions(target / target_rel, source_dirs))
+        actions.extend(_mirror_actions(target / target_rel, source_dirs, target))
 
     settings = _settings_action(repo_root, project_name, target)
     if settings is not None:
@@ -42,7 +43,7 @@ def _mirror_specs(repo_root, project_name):
     ]
 
 
-def _mirror_actions(dst_root, source_dirs):
+def _mirror_actions(dst_root, source_dirs, target):
     """1つのミラー対象ディレクトリについて copy と delete のアクションを組み立てる。"""
     sources = {}
     for source_dir in source_dirs:
@@ -59,10 +60,17 @@ def _mirror_actions(dst_root, source_dirs):
     if not sources:
         return []
 
-    if dst_root.is_symlink():
+    # dst_root 自体、あるいはその祖先（.claude など）がシンボリックリンクだと
+    # 実体は配布先の外にある可能性がある。is_symlink() は dst_root 自身しか
+    # 見ないため、一段上のディレクトリがリンクだと見逃してしまう（rglob が
+    # リンクの先を辿り、配布先の外を削除しかねない）。realpath で両者を解決し、
+    # 実体が配布先の内側に収まっているかを見る方が確実。
+    real_dst_root = os.path.realpath(str(dst_root))
+    real_target = os.path.realpath(str(target))
+    if real_dst_root != real_target and not real_dst_root.startswith(real_target + os.sep):
         raise ConfigError(
-            "配布先の {} がシンボリックリンクです。"
-            "シンボリックリンクになっているミラー対象ディレクトリへの配布はサポートしていません"
+            "配布先の {} がシンボリックリンク経由で配布先ディレクトリの外を指しています。"
+            "シンボリックリンクで配布先の外に出るミラー対象ディレクトリへの配布はサポートしていません"
             "（リンクの先を辿って配布先の外を削除してしまうため）。".format(dst_root)
         )
 
