@@ -144,6 +144,11 @@ def _copy_status(src, dst):
 def _write_status(content, dst):
     if not dst.is_file():
         return "new"
-    if dst.read_text(encoding="utf-8") == content:
+    try:
+        current = dst.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        # 読めない配布先ファイルは内容を確認できないので、上書き対象として扱う
+        return "update"
+    if current == content:
         return "unchanged"
     return "update"

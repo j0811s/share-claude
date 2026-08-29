@@ -132,6 +132,32 @@ class BuildPlanTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             self._plan()
 
+    def test_unreadable_target_settings_is_treated_as_update(self):
+        _write(self.repo / "common/settings.json", json.dumps({"model": "opus"}))
+        dst = self.target / ".claude/settings.json"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes('{"model": "オパス"}'.encode("shift_jis"))
+        writes = [a for a in self._plan() if a.kind == "write"]
+        self.assertEqual(writes[0].status, "update")
+
+    def test_delete_actions_are_ordered_for_rmdir(self):
+        _write(self.repo / "common/skills/live.md", "x")
+        _write(self.target / ".claude/skills/dead/a/b/deep.md", "old")
+        _write(self.target / ".claude/skills/dead/top.md", "old")
+        deletes = [a.dst for a in self._plan() if a.kind == "delete"]
+        skills = self.target / ".claude/skills"
+        # ファイルは全てディレクトリより先に削除される
+        last_file = max(deletes.index(p) for p in [
+            skills / "dead/a/b/deep.md", skills / "dead/top.md"
+        ])
+        first_dir = min(deletes.index(p) for p in [
+            skills / "dead/a/b", skills / "dead/a", skills / "dead"
+        ])
+        self.assertLess(last_file, first_dir)
+        # ディレクトリは深い順（rmdir は空でないと失敗する）
+        self.assertLess(deletes.index(skills / "dead/a/b"), deletes.index(skills / "dead/a"))
+        self.assertLess(deletes.index(skills / "dead/a"), deletes.index(skills / "dead"))
+
 
 if __name__ == "__main__":
     unittest.main()
