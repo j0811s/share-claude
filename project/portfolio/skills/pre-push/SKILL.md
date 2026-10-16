@@ -69,8 +69,6 @@ npm run e2e
    | JSDoc・コメントの追加 | `pr-review-toolkit:comment-analyzer` |
    | 認証・API・フォーム変更 | `security-reviewer` |
 
-5. 最後に `/difit-review` を起動してユーザーによるレビューを依頼する
-
 ### 6. 結果サマリーの報告
 
 全ステップの結果を表にまとめて報告する：
