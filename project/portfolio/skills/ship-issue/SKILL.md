@@ -1,12 +1,13 @@
 ---
 name: ship-issue
-description: GitHub Issue の実装から PR・マージ・GitHub Release 作成までを扱う。Issue を起点に実装を始めるとき、または Issue 対応中のブランチ・PR の続き（CI 待ち・マージ・リリース）を再開するときに使う。引数に Issue 番号を取る（例: /ship-issue 12）。
+description: GitHub Issue の実装から PR 作成・CI 通過までを扱い、人間のマージ後に自動リリースを確認する。Issue を起点に実装を始めるとき、または Issue 対応中のブランチ・PR の続き（CI 待ち・マージ後の確認）を再開するときに使う。引数に Issue 番号を取る（例: /ship-issue 12）。
 argument-hint: "[issue-number]"
 ---
 
 # Ship Issue
 
-GitHub Issue → 実装 → PR → マージ → GitHub Release までを1本のワークフローで進める。
+GitHub Issue → 実装 → PR → CI 通過までを進め、マージは人間に委ねる。
+マージ後の GitHub Release は `.github/workflows/release.yml` が自動作成する。
 GitHub 操作はすべて `gh` CLI で行う（GitHub MCP は使わない）。
 
 **🛑 STOP と書かれた箇所では必ず停止し、ユーザーの承認を得てから次へ進む。** 承認なしにまとめて進めない。
@@ -22,9 +23,8 @@ Ship Issue #<N>:
 - [ ] 4. /pre-push 通過
 - [ ] 5. コミット・PR 作成の承認 🛑 → push・PR 作成
 - [ ] 6. CI 通過
-- [ ] 7. マージの承認 🛑 → マージ
-- [ ] 8. バージョンの承認 🛑 → Release 作成
-- [ ] 9. 完了報告
+- [ ] 7. 人間にマージを依頼 🛑
+- [ ] 8. マージ後の確認（Release・後片付け）
 ```
 
 ## 0. Issue の特定と再開判定
@@ -34,7 +34,7 @@ Ship Issue #<N>:
 
 ```bash
 git branch --list "*/<N>-*"
-gh pr list --state all --search "<N> in:body"
+gh pr list --state all --search "<N> in:body" --json number,state,headRefName
 ```
 
 | 状態 | 再開フェーズ |
@@ -42,7 +42,7 @@ gh pr list --state all --search "<N> in:body"
 | ブランチ・PR なし | 1 |
 | ブランチあり・PR なし | 3 |
 | PR open | 6 |
-| PR merged・未リリース | 8 |
+| PR merged | 8 |
 
 ## 1. Issue の読み込みと方針決定
 
@@ -76,6 +76,7 @@ git switch -c <type>/<N>-<slug>   # 例: feat/12-blog-rss, fix/15-toc-anchor
 ## 5. コミット・push・PR 作成
 
 コミットは Conventional Commits 形式・日本語 subject（`wrap-up` スキルの型表に準拠）、末尾に Co-Authored-By 行。
+**コミットの型がリリースのバージョンを決める**（`feat` → minor、`fix` → patch、`!:` / `BREAKING CHANGE` → major、それ以外のみ → リリースなし）ので、型は変更内容に正確に合わせる。
 
 🛑 **STOP: コミット内容と PR タイトル・本文の承認を得る。**
 
@@ -92,54 +93,41 @@ PR 本文に必ず含める：概要、変更点、テスト結果（`/pre-push`
 gh pr checks <PR> --watch
 ```
 
-`Check` が失敗したらログ（`gh run view --log-failed`）を確認し、フェーズ3に戻って修正・push する。
+`check` が失敗したらログ（`gh run view <run-id> --log-failed`）を確認し、フェーズ3に戻って修正・push する。
 
-## 7. マージ
+## 7. 人間にマージを依頼
 
-🛑 **STOP: マージの承認を得る。**
+**Claude はマージしない（`gh pr merge` を実行しない）。** 以下を報告して停止する：
+
+- PR の URL と CI 結果
+- レビューしてほしい点（設計判断・影響範囲・目視確認すべき画面）
+- マージ後に自動リリースされる見込みのバージョン（前回タグ以降のコミットの型から）
+
+🛑 **STOP: ユーザーがマージしたと伝えるまで待つ。**
+
+## 8. マージ後の確認
 
 ```bash
-gh pr merge <PR> --merge --delete-branch   # このリポジトリは merge commit のみ許可
+gh pr view <PR> --json state,mergedAt        # MERGED を確認
 git switch main && git pull --ff-only
+git branch -d <branch>
+git push origin --delete <branch> 2>/dev/null || true   # GitHub 側で削除済みなら何もしない
+gh run list -w release.yml -L 1               # 自動リリースの実行結果
+gh release view --json tagName,url            # 最新 Release
+gh issue view <N> --json state                # Closes #N で CLOSED になったか
 ```
 
-**`--admin` は絶対に使わない。** CI が通らない PR をブランチ保護を迂回してマージしない。
+- `release.yml` が失敗していたらログを確認して報告する（Release を手動で作り直さない）。
+- `docs` / `chore` 等のみでリリースが作られなかった場合は、その旨を報告する。
 
-## 8. リリース
-
-前回タグ以降のコミットからバージョンを決める（タグが無ければ初回は `v1.0.0`）：
-
-```bash
-git fetch --tags
-git describe --tags --abbrev=0            # 前回タグ
-git log <前回タグ>..main --oneline
-```
-
-| 含まれるコミット | 上げる桁 |
-|-----------------|---------|
-| `BREAKING CHANGE` / `!:` | major |
-| `feat` | minor |
-| それ以外のみ | patch |
-
-🛑 **STOP: バージョン番号の承認を得る。**
-
-```bash
-gh release create v<X.Y.Z> --target main --generate-notes
-git fetch --tags
-```
-
-`package.json` の `version` は更新しない（バージョンはタグで管理）。デプロイは Vercel の main 自動デプロイに任せる。
-
-## 9. 完了報告
-
-Issue（自動クローズされたか `gh issue view <N> --json state` で確認）・PR・Release の URL をまとめて報告する。
+Issue・PR・Release（またはリリースなし）の結果をまとめて報告する。
 
 ## よくある間違い
 
 | 間違い | 正しい対応 |
 |--------|-----------|
-| `gh pr merge --squash` / `--rebase` | このリポジトリでは失敗する。`--merge` を使う |
-| `--delete-branch` を付け忘れる | 自動削除は無効なので、ブランチが残り続ける |
-| CI 失敗中に `--admin` でマージ | 禁止。修正して CI を通す |
-| main への直接 push でバージョンを上げる | ブランチ保護違反。バージョンはタグのみ |
+| Claude が `gh pr merge` でマージする | マージは人間が行う。フェーズ7で停止する |
+| `gh release create` で手動リリースする | Release は `release.yml` が作る。重複させない |
+| 実質 `feat` の変更を `chore` でコミット | リリースされない。型を変更内容に合わせる |
+| main に直接 push する | ルールセットで禁止。必ず PR 経由 |
 | PR 本文に `Closes #N` が無い | Issue が自動クローズされない |
