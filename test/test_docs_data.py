@@ -94,6 +94,12 @@ class DocsDataTest(unittest.TestCase):
         self.assertEqual((data["projects"][0]["claudeMd"], data["projects"][0]["rules"]), (None, []))
         self.assertEqual(data["projects"][1]["claudeMd"], "project/b/CLAUDE.md")
 
+    def test_rules_are_repo_relative(self):
+        _write(self.repo / "project/a/rules/x.md", "x")
+        _write(self.repo / "project/a/rules/.gitkeep", "")
+        data = build_docs_data(self.repo)
+        self.assertEqual(data["projects"][0]["rules"], ["project/a/rules/x.md"])
+
 
 if __name__ == "__main__":
     unittest.main()

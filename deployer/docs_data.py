@@ -145,6 +145,6 @@ def build_docs_data(repo_root):
             "hooks": export_hooks(repo_root, name),
             "permissions": export_permissions(repo_root, name),
             "claudeMd": claude_md.relative_to(repo_root).as_posix() if claude_md.is_file() else None,
-            "rules": sorted(rel.as_posix() for rel in rules),
+            "rules": sorted(path.relative_to(repo_root).as_posix() for path in rules.values()),
         })
     return {"projects": projects}
