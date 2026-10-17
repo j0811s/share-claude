@@ -43,8 +43,8 @@ def _mirror_specs(repo_root, project_name):
     ]
 
 
-def _mirror_actions(dst_root, source_dirs, target):
-    """1つのミラー対象ディレクトリについて copy と delete のアクションを組み立てる。"""
+def collect_sources(source_dirs):
+    """重ねたソースを 相対パス -> 実ファイル の辞書にする。後のディレクトリが勝つ。"""
     sources = {}
     for source_dir in source_dirs:
         if not source_dir.is_dir():
@@ -53,6 +53,12 @@ def _mirror_actions(dst_root, source_dirs, target):
             if not path.is_file() or path.name in EXCLUDED_NAMES:
                 continue
             sources[path.relative_to(source_dir)] = path
+    return sources
+
+
+def _mirror_actions(dst_root, source_dirs, target):
+    """1つのミラー対象ディレクトリについて copy と delete のアクションを組み立てる。"""
+    sources = collect_sources(source_dirs)
 
     # 管理下かどうかはディレクトリの存在ではなく、配布するファイルの有無で決める。
     # ディレクトリの存在で判定すると .gitkeep しか無いディレクトリが管理下と
@@ -118,19 +124,22 @@ def _stale_actions(dst_root, placed_rels):
     return actions
 
 
-def _settings_action(repo_root, project_name, target):
-    """settings.json の write アクションを返す。ソースが無ければ None。"""
+def merged_settings(repo_root, project_name):
+    """common と project の settings.json を重ねた dict を返す。どちらも無ければ None。"""
     base = _load_json(repo_root / "common" / "settings.json")
     overlay = _load_json(repo_root / "project" / project_name / "settings.json")
-    if base is None and overlay is None:
-        return None
-
     if base is None:
-        merged = overlay
-    elif overlay is None:
-        merged = base
-    else:
-        merged = merge_settings(base, overlay)
+        return overlay
+    if overlay is None:
+        return base
+    return merge_settings(base, overlay)
+
+
+def _settings_action(repo_root, project_name, target):
+    """settings.json の write アクションを返す。ソースが無ければ None。"""
+    merged = merged_settings(repo_root, project_name)
+    if merged is None:
+        return None
 
     content = json.dumps(merged, ensure_ascii=False, indent=2) + "\n"
     dst = target / ".claude" / "settings.json"
