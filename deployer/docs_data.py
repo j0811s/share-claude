@@ -40,6 +40,8 @@ def export_skills(repo_root, project_name):
         origin = "common" if common_dir in path.parents else "project"
         skills.append({
             "name": fm.get("name") or rel.parts[0],
+            # name は重複しうるが、ディレクトリ名は配布先で一意。ページのパスに使う
+            "dir": rel.parts[0],
             "description": fm.get("description"),
             "argumentHint": fm.get("argument-hint"),
             "manualOnly": fm.get("disable-model-invocation") == "true",
