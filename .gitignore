@@ -2,6 +2,9 @@
 .worktrees/
 .superpowers/
 
+# Playwright MCP のスナップショット出力
+.playwright-mcp/
+
 # 配布先パスはマシンごとに異なるローカル設定
 projects.json
 
