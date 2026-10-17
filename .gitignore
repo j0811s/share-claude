@@ -11,3 +11,10 @@ projects.json
 # Python
 __pycache__/
 *.pyc
+
+# Starlight サイト（生成物・ビルド成果物）
+site/node_modules/
+site/dist/
+site/.astro/
+site/src/generated/
+site/src/content/docs/*/

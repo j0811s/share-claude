@@ -1,0 +1,20 @@
+{
+  "name": "site",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "export": "python3 ../bin/export-docs-data.py src/generated/docs-data.json",
+    "generate": "node scripts/generate-pages.mjs",
+    "build": "npm run export && npm run generate && astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.2.10",
+    "sharp": "^0.35.3"
+  }
+}
