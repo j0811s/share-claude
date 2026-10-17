@@ -1,9 +1,17 @@
 """docs_data の検証。ファイルシステムのフィクスチャを一時ディレクトリに作る。"""
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from deployer.docs_data import export_skills, parse_frontmatter
+from deployer.docs_data import (
+    build_docs_data,
+    export_hooks,
+    export_permissions,
+    export_skills,
+    parse_frontmatter,
+    script_description,
+)
 
 
 def _write(path, content):
@@ -49,6 +57,42 @@ class DocsDataTest(unittest.TestCase):
         _write(self.repo / "common/skills/a/SKILL.md", "---\nname: a\n---\n")
         _write(self.repo / "common/skills/a/references/x.md", "x")
         self.assertEqual([s["name"] for s in export_skills(self.repo, "p")], ["a"])
+
+    def test_script_description(self):
+        self.assertEqual(script_description("#!/bin/sh\n# 説明: .env を守る\ninput=$(cat)\n"), ".env を守る")
+        self.assertIsNone(script_description("#!/bin/sh\ninput=$(cat)\n"))
+
+    def test_hooks_resolve_script_and_origin(self):
+        _write(self.repo / "common/hooks/a.sh", "#!/bin/sh\n# 説明: A\n")
+        _write(self.repo / "common/settings.json", json.dumps({"hooks": {"PreToolUse": [
+            {"matcher": "Edit", "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/a.sh"}]}]}}))
+        _write(self.repo / "project/p/settings.json", json.dumps({"hooks": {"PostToolUse": [
+            {"hooks": [{"type": "command", "command": "npx foo"}]}]}}))
+        hooks = export_hooks(self.repo, "p")
+        self.assertEqual(hooks[0], {"event": "PreToolUse", "matcher": "Edit",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/a.sh", "origin": "common",
+            "script": {"path": "common/hooks/a.sh", "description": "A"}})
+        self.assertEqual((hooks[1]["matcher"], hooks[1]["script"], hooks[1]["origin"]), (None, None, "project"))
+
+    def test_permissions_origin(self):
+        _write(self.repo / "common/settings.json", json.dumps({"permissions": {"deny": ["X"]}}))
+        _write(self.repo / "project/p/settings.json", json.dumps({"permissions": {"deny": ["X", "Y"], "allow": ["Z"]}}))
+        self.assertEqual(export_permissions(self.repo, "p"), {
+            "deny": [{"rule": "X", "origin": "common"}, {"rule": "Y", "origin": "project"}],
+            "ask": [], "allow": [{"rule": "Z", "origin": "project"}]})
+
+    def test_no_settings_anywhere(self):
+        (self.repo / "project/p").mkdir(parents=True)
+        self.assertEqual(export_hooks(self.repo, "p"), [])
+        self.assertEqual(export_permissions(self.repo, "p"), {"deny": [], "ask": [], "allow": []})
+
+    def test_build_docs_data_lists_projects_and_files(self):
+        _write(self.repo / "project/b/CLAUDE.md", "x")
+        _write(self.repo / "project/a/rules/.gitkeep", "")
+        data = build_docs_data(self.repo)
+        self.assertEqual([p["name"] for p in data["projects"]], ["a", "b"])
+        self.assertEqual((data["projects"][0]["claudeMd"], data["projects"][0]["rules"]), (None, []))
+        self.assertEqual(data["projects"][1]["claudeMd"], "project/b/CLAUDE.md")
 
 
 if __name__ == "__main__":
