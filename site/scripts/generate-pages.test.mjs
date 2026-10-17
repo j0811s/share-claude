@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderProject } from './generate-pages.mjs';
+import { renderCommon, renderProject } from './generate-pages.mjs';
 
 const project = { name: 'p', claudeMd: null, rules: [],
   skills: [{ name: 's', dir: 's', description: 'a | b\nc "q": x', argumentHint: '[n]', manualOnly: true, origin: 'project', path: 'project/p/skills/s/SKILL.md' },
@@ -8,8 +8,10 @@ const project = { name: 'p', claudeMd: null, rules: [],
   hooks: [], permissions: { deny: [], ask: [], allow: [] } };
 const files = Object.fromEntries(renderProject(project).map(f => [f.path, f.content]));
 
-test('生成されるファイル', () => assert.deepEqual(Object.keys(files).sort(),
-  ['p/hooks.md', 'p/index.md', 'p/permissions.md', 'p/skills/s.md', 'p/skills/t.md']));
+test('生成されるファイル（共通スキルのページはプロジェクト側に作らない）', () => assert.deepEqual(Object.keys(files).sort(),
+  ['p/hooks.md', 'p/index.md', 'p/permissions.md', 'p/skills/s.md']));
+test('共通スキルの行は共通ページへリンク', () =>
+  assert.match(files['p/index.md'], /\[`\/t`\]\(\/share-claude\/common\/skills\/t\/\)/));
 test('表セルの | と改行をエスケープ', () => assert.match(files['p/index.md'], /a \\\| b c "q": x/));
 test('呼び方と区分', () => { assert.match(files['p/index.md'], /`\/s \[n\]`/); assert.match(files['p/index.md'], /専用・手動のみ/); });
 test('説明なし', () => assert.match(files['p/index.md'], /（説明なし）/));
@@ -56,3 +58,18 @@ test('スキル0件は「なし」', () => {
   const empty = Object.fromEntries(renderProject({ ...full, skills: [] }).map(f => [f.path, f.content]));
   assert.match(empty['q/index.md'], /## スキル一覧\n\nなし/);
 });
+
+const common = {
+  skills: [{ name: 't', dir: 't', description: '共通スキル', argumentHint: null, manualOnly: false, origin: 'common', path: 'common/skills/t/SKILL.md' }],
+  hooks: [], permissions: { deny: [{ rule: 'X', origin: 'common' }], ask: [], allow: [] } };
+const c = Object.fromEntries(renderCommon(common).map(f => [f.path, f.content]));
+
+test('共通: 生成されるファイル', () => assert.deepEqual(Object.keys(c).sort(),
+  ['common/hooks.md', 'common/index.md', 'common/permissions.md', 'common/skills/t.md']));
+test('共通: 概要のタイトルと説明、スキルへのリンク', () => {
+  assert.match(c['common/index.md'], /^---\ntitle: "共通"\n/);
+  assert.match(c['common/index.md'], /すべてのプロジェクトに配られる/);
+  assert.match(c['common/index.md'], /\(\/share-claude\/common\/skills\/t\/\)/);
+  assert.match(c['common/index.md'], /\(\/share-claude\/common\/hooks\/\)/);
+});
+test('共通: CLAUDE.md / rules のリンクは出さない', () => assert.doesNotMatch(c['common/index.md'], /CLAUDE\.md|rules/));

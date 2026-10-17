@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from deployer.config import ConfigError
 from deployer.docs_data import (
     build_docs_data,
     export_hooks,
@@ -107,6 +108,34 @@ class DocsDataTest(unittest.TestCase):
         _write(self.repo / "project/a/rules/.gitkeep", "")
         data = build_docs_data(self.repo)
         self.assertEqual(data["projects"][0]["rules"], ["project/a/rules/x.md"])
+
+    def test_common_section_contains_only_common(self):
+        _write(self.repo / "common/skills/c/SKILL.md", "---\nname: c\n---\n")
+        _write(self.repo / "project/p/skills/q/SKILL.md", "---\nname: q\n---\n")
+        _write(self.repo / "common/hooks/a.sh", "#!/bin/sh\n# 説明: A\n")
+        _write(self.repo / "common/settings.json", json.dumps({
+            "permissions": {"deny": ["X"]},
+            "hooks": {"PreToolUse": [{"matcher": "Edit", "hooks": [
+                {"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/a.sh"}]}]},
+        }))
+        _write(self.repo / "project/p/settings.json", json.dumps({"permissions": {"deny": ["Y"]}}))
+        common = build_docs_data(self.repo)["common"]
+        self.assertEqual([(s["name"], s["origin"]) for s in common["skills"]], [("c", "common")])
+        self.assertEqual([(h["origin"], h["script"]["path"]) for h in common["hooks"]],
+                         [("common", "common/hooks/a.sh")])
+        self.assertEqual(common["permissions"],
+                         {"deny": [{"rule": "X", "origin": "common"}], "ask": [], "allow": []})
+
+    def test_common_section_without_common_dir(self):
+        (self.repo / "project/p").mkdir(parents=True)
+        self.assertEqual(build_docs_data(self.repo)["common"],
+                         {"skills": [], "hooks": [], "permissions": {"deny": [], "ask": [], "allow": []}})
+
+    def test_project_named_common_is_rejected(self):
+        # サイト上で共通ページの URL（/common/）と衝突するため
+        (self.repo / "project/common").mkdir(parents=True)
+        with self.assertRaises(ConfigError):
+            build_docs_data(self.repo)
 
 
 if __name__ == "__main__":

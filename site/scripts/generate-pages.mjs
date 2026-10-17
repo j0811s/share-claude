@@ -6,6 +6,8 @@ const BASE = '/share-claude';
 const GITHUB = 'https://github.com/j0811s/share-claude/blob/main/';
 const NO_DESC = '（説明なし）';
 const NONE = 'なし';
+// 共通設定のページを置くディレクトリ。エクスポータがプロジェクト名としての使用を禁止している
+const COMMON = 'common';
 const EVENT_LABELS = { PreToolUse: 'ツール実行前', PostToolUse: 'ツール実行後' };
 
 const originLabel = (o) => (o === 'common' ? '共通' : '専用');
@@ -37,7 +39,9 @@ const table = (headers, rows) =>
   [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n') + '\n';
 
 const invocation = (s) => `/${s.name}${s.argumentHint ? ` ${s.argumentHint}` : ''}`;
-const skillUrl = (project, s) => `${BASE}/${project.name}/skills/${s.dir}/`;
+// 共通スキルのページは共通側にだけ作り、プロジェクトからはそこへリンクする
+const skillSection = (section, s) => (s.origin === 'common' ? COMMON : section.name);
+const skillUrl = (section, s) => `${BASE}/${skillSection(section, s)}/skills/${s.dir}/`;
 
 function renderIndex(project) {
   const rows = project.skills.map((s) => [
@@ -52,7 +56,8 @@ function renderIndex(project) {
   if (project.claudeMd) links.push(`- ${ghLink('CLAUDE.md', project.claudeMd)}`);
   for (const r of project.rules) links.push(`- ${ghLink(path.posix.basename(r), r)}`);
   return (
-    frontmatter(project.name, 0, '概要') +
+    frontmatter(project.title ?? project.name, 0, '概要') +
+    (project.intro ? `${project.intro}\n\n` : '') +
     '## スキル一覧\n\n' +
     (rows.length ? table(['呼び方', 'できること', '区分'], rows) : `${NONE}\n`) +
     '\n## 関連\n\n' + links.join('\n') + '\n'
@@ -93,15 +98,29 @@ function renderPermissions(project) {
   return frontmatter('禁止・許可', 91) + body.join('\n');
 }
 
-export function renderProject(project) {
-  const n = project.name;
+function renderSection(section) {
+  const n = section.name;
   return [
-    { path: `${n}/index.md`, content: renderIndex(project) },
-    ...project.skills.map((s) => ({ path: `${n}/skills/${s.dir}.md`, content: renderSkill(s) })),
-    { path: `${n}/hooks.md`, content: renderHooks(project) },
-    { path: `${n}/permissions.md`, content: renderPermissions(project) },
+    { path: `${n}/index.md`, content: renderIndex(section) },
+    ...section.skills
+      .filter((s) => skillSection(section, s) === n)
+      .map((s) => ({ path: `${n}/skills/${s.dir}.md`, content: renderSkill(s) })),
+    { path: `${n}/hooks.md`, content: renderHooks(section) },
+    { path: `${n}/permissions.md`, content: renderPermissions(section) },
   ];
 }
+
+export const renderProject = (project) => renderSection(project);
+
+export const renderCommon = (common) =>
+  renderSection({
+    ...common,
+    name: COMMON,
+    title: '共通',
+    intro: 'すべてのプロジェクトに配られる設定です。各プロジェクトのページにも、この内容が含まれています。',
+    claudeMd: null,
+    rules: [],
+  });
 
 function main() {
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -111,8 +130,8 @@ function main() {
   for (const entry of fs.readdirSync(docs, { withFileTypes: true })) {
     if (entry.isDirectory()) fs.rmSync(path.join(docs, entry.name), { recursive: true });
   }
-  for (const project of data.projects) {
-    for (const f of renderProject(project)) {
+  for (const files of [renderCommon(data.common), ...data.projects.map(renderProject)]) {
+    for (const f of files) {
       const dest = path.join(docs, f.path);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, f.content);

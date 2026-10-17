@@ -2,7 +2,26 @@
 
 from pathlib import Path
 
+from deployer.config import ConfigError
 from deployer.plan import _load_json, collect_sources, merged_settings
+
+# サイト上で共通ページの URL（/common/）に使うため、プロジェクト名には使えない
+COMMON_SECTION = "common"
+
+
+def _source_dirs(repo_root, project_name, kind):
+    """重ねるソースディレクトリ。project_name が None なら common だけ。"""
+    dirs = [repo_root / "common" / kind]
+    if project_name is not None:
+        dirs.append(repo_root / "project" / project_name / kind)
+    return dirs
+
+
+def _settings(repo_root, project_name):
+    """配布される settings。project_name が None なら common のみ。"""
+    if project_name is None:
+        return _common_settings(repo_root)
+    return merged_settings(repo_root, project_name) or {}
 
 
 def parse_frontmatter(text):
@@ -27,10 +46,10 @@ def parse_frontmatter(text):
 
 
 def export_skills(repo_root, project_name):
-    """配布されるスキルの一覧を name 昇順で返す。"""
-    common_dir = repo_root / "common" / "skills"
-    project_dir = repo_root / "project" / project_name / "skills"
-    sources = collect_sources([common_dir, project_dir])
+    """配布されるスキルの一覧を name 昇順で返す。project_name が None なら common のみ。"""
+    source_dirs = _source_dirs(repo_root, project_name, "skills")
+    common_dir = source_dirs[0]
+    sources = collect_sources(source_dirs)
 
     skills = []
     for rel, path in sources.items():
@@ -80,14 +99,10 @@ def _common_settings(repo_root):
 
 
 def export_hooks(repo_root, project_name):
-    """マージ後 settings の hooks を平坦化して返す。"""
-    merged = merged_settings(repo_root, project_name) or {}
+    """マージ後 settings の hooks を平坦化して返す。project_name が None なら common のみ。"""
+    merged = _settings(repo_root, project_name)
     common_hooks = _common_settings(repo_root).get("hooks", {})
-
-    hooks_dir = collect_sources([
-        repo_root / "common" / "hooks",
-        repo_root / "project" / project_name / "hooks",
-    ])
+    hooks_dir = collect_sources(_source_dirs(repo_root, project_name, "hooks"))
 
     result = []
     for event, groups in merged.get("hooks", {}).items():
@@ -118,8 +133,8 @@ def _resolve_script(repo_root, hooks_dir, command):
 
 
 def export_permissions(repo_root, project_name):
-    """deny / ask / allow を、ルールごとの由来つきで返す。"""
-    merged = merged_settings(repo_root, project_name) or {}
+    """deny / ask / allow を、ルールごとの由来つきで返す。project_name が None なら common のみ。"""
+    merged = _settings(repo_root, project_name)
     common = _common_settings(repo_root).get("permissions", {})
 
     result = {}
@@ -136,6 +151,11 @@ def build_docs_data(repo_root):
     """全プロジェクトのドキュメント用データを組み立てる。"""
     project_root = repo_root / "project"
     names = sorted(p.name for p in project_root.iterdir() if p.is_dir()) if project_root.is_dir() else []
+    if COMMON_SECTION in names:
+        raise ConfigError(
+            "project/{} はドキュメントサイトの共通ページと名前が衝突します。"
+            "別のプロジェクト名にしてください。".format(COMMON_SECTION)
+        )
 
     projects = []
     for name in names:
@@ -149,4 +169,9 @@ def build_docs_data(repo_root):
             "claudeMd": claude_md.relative_to(repo_root).as_posix() if claude_md.is_file() else None,
             "rules": sorted(path.relative_to(repo_root).as_posix() for path in rules.values()),
         })
-    return {"projects": projects}
+    common = {
+        "skills": export_skills(repo_root, None),
+        "hooks": export_hooks(repo_root, None),
+        "permissions": export_permissions(repo_root, None),
+    }
+    return {"common": common, "projects": projects}
