@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "predev": "npm run export && npm run generate",
     "dev": "astro dev",
     "start": "astro dev",
     "export": "python3 ../bin/export-docs-data.py src/generated/docs-data.json",

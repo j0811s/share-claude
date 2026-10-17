@@ -83,6 +83,17 @@ cp projects.example.json projects.json
 hook スクリプトを参照するときは絶対パスではなく
 `$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh` を使うこと。
 
+## ドキュメントサイト
+
+プロジェクト別の配布内容（skills / hooks / rules / permissions）を
+https://j0811s.github.io/share-claude/ で公開している。`main` への push で GitHub Pages に自動デプロイされる。
+
+ローカルで確認する場合（Node 24 が必要）:
+
+```bash
+cd site && npm ci && npm run dev
+```
+
 ## 開発
 
 ```bash
