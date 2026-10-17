@@ -19,7 +19,15 @@ export default defineConfig({
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/j0811s/share-claude' }],
 			sidebar: [
 				{ label: 'はじめに', link: '/' },
-				...projects.map((p) => ({ label: p.name, items: [{ autogenerate: { directory: p.name } }] })),
+				...projects.map((p) => ({
+						label: p.name,
+						items: [
+							{ slug: p.name },
+							{ label: 'スキル', items: [{ autogenerate: { directory: `${p.name}/skills` } }] },
+							{ slug: `${p.name}/hooks` },
+							{ slug: `${p.name}/permissions` },
+						],
+					})),
 			],
 		}),
 	],

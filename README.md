@@ -94,6 +94,8 @@ https://j0811s.github.io/share-claude/ で公開している。`main` への pus
 cd site && npm ci && npm run dev
 ```
 
+`npm run dev` / `npm run build` は事前にデータ書き出し（`bin/export-docs-data.py`）を実行するため、`python3` が PATH 上に必要。
+
 ## 開発
 
 ```bash
