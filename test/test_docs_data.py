@@ -46,6 +46,14 @@ class DocsDataTest(unittest.TestCase):
         _write(self.repo / "common/skills/bar/SKILL.md", "# bar")
         s = export_skills(self.repo, "p")[0]
         self.assertEqual((s["name"], s["description"], s["manualOnly"]), ("bar", None, False))
+        self.assertEqual((s["origin"], s["dir"]), ("common", "bar"))
+
+    def test_same_name_in_different_dirs_keeps_distinct_dir(self):
+        # name が同じでもディレクトリが違えば両方配布される。ページの衝突を避けるため dir で区別する
+        _write(self.repo / "common/skills/a/SKILL.md", "---\nname: x\n---\n")
+        _write(self.repo / "project/p/skills/b/SKILL.md", "---\nname: x\n---\n")
+        skills = export_skills(self.repo, "p")
+        self.assertEqual(sorted(s["dir"] for s in skills), ["a", "b"])
 
     def test_manual_only_and_argument_hint(self):
         _write(self.repo / "project/p/skills/z/SKILL.md",
