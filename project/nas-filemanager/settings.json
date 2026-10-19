@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test)",
+      "Bash(npm test)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run fmt)",
+      "Bash(npm run fmt:check)",
+      "Bash(npx tsc:*)",
+      "Bash(npx oxlint:*)",
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git diff --staged)",
+      "Bash(git diff --stat)"
+    ],
+    "deny": [
+      "Bash(brew:*)",
+      "Read(/deploy/deploy.env)",
+      "Read(/deploy/nas-fm.env)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(npm install)",
+      "Bash(npm ci)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path // empty' | { read -r f; case \"$f\" in *package-lock.json) ;; *.ts|*.tsx|*.js|*.jsx|*.json) npx oxfmt \"$f\" 2>/dev/null || true;; esac; }",
+            "timeout": 30,
+            "statusMessage": "oxfmt で整形中..."
+          }
+        ]
+      }
+    ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  }
+}
