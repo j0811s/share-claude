@@ -12,11 +12,12 @@
       "Bash(npx tsc:*)",
       "Bash(npx oxlint:*)",
       "Bash(git status)",
-      "Bash(git diff:*)"
+      "Bash(git diff)",
+      "Bash(git diff --staged)",
+      "Bash(git diff --stat)"
     ],
     "deny": [
       "Bash(brew:*)",
-      "Bash(git diff --no-index:*)",
       "Read(/deploy/deploy.env)",
       "Read(/deploy/nas-fm.env)"
     ],
