@@ -117,7 +117,8 @@ gh release view --json tagName,url            # 最新 Release
 gh issue view <N> --json state                # Closes #N で CLOSED になったか
 ```
 
-- `release.yml` が失敗していたらログを確認して報告する（Release を手動で作り直さない）。
+- `release.yml` が失敗していたらログを確認して報告する（`gh release create` で Release を手動で作り直さない）。
+- `release.yml` が `queued` のまま進まない、または Actions の障害で失敗した場合は、https://www.githubstatus.com/ で Actions の障害を確認して報告する。障害の解消後に `gh workflow run release.yml` での再実行をユーザーに提案する（前回タグ以降の全コミットから判定するので重複しない。再実行しなくても次のマージで取りこぼし分もまとめてリリースされる）。
 - `docs` / `chore` 等のみでリリースが作られなかった場合は、その旨を報告する。
 
 Issue・PR・Release（またはリリースなし）の結果をまとめて報告する。
@@ -127,7 +128,7 @@ Issue・PR・Release（またはリリースなし）の結果をまとめて報
 | 間違い | 正しい対応 |
 |--------|-----------|
 | Claude が `gh pr merge` でマージする | マージは人間が行う。フェーズ7で停止する |
-| `gh release create` で手動リリースする | Release は `release.yml` が作る。重複させない |
+| `gh release create` で手動リリースする | Release は `release.yml` が作る。取りこぼしは `gh workflow run release.yml` で再実行する |
 | 実質 `feat` の変更を `chore` でコミット | リリースされない。型を変更内容に合わせる |
 | main に直接 push する | ルールセットで禁止。必ず PR 経由 |
 | PR 本文に `Closes #N` が無い | Issue が自動クローズされない |
