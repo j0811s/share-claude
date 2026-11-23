@@ -1,4 +1,5 @@
 {
   "portfolio": "~/path/to/portfolio",
-  "nas-filemanager": "~/path/to/NAS-FileManager"
+  "nas-filemanager": "~/path/to/NAS-FileManager",
+  "media-api": "~/path/to/media-api"
 }
